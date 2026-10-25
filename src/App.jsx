@@ -1,121 +1,164 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
+import { useEffect, useState } from 'react'
 import './App.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [mode, setMode] = useState('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [user, setUser] = useState(null)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [checkingSession, setCheckingSession] = useState(
+    () => Boolean(sessionStorage.getItem('authToken')),
+  )
+
+  useEffect(() => {
+    const token = sessionStorage.getItem('authToken')
+    if (!token) return
+
+    fetch(`${API_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.message || 'Could not restore your session.')
+        setUser(data.user)
+      })
+      .catch((sessionError) => {
+        sessionStorage.removeItem('authToken')
+        setError(sessionError.message)
+      })
+      .finally(() => setCheckingSession(false))
+  }, [])
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      const response = await fetch(`${API_URL}/api/auth/${mode}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) throw new Error(data.message || 'Unable to continue.')
+
+      sessionStorage.setItem('authToken', data.token)
+      setUser(data.user)
+      setPassword('')
+    } catch (submitError) {
+      setError(submitError.message || 'Unable to connect. Check that the backend is running.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function signOut() {
+    sessionStorage.removeItem('authToken')
+    setUser(null)
+    setMode('login')
+    setError('')
+  }
+
+  if (checkingSession) {
+    return <main className="page"><p className="loading">Checking your session...</p></main>
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+    <main className="page">
+      <section className="auth-card" aria-labelledby="page-title">
+        <div className="brand-mark" aria-hidden="true">M</div>
+        {user ? (
+          <div className="welcome">
+            <p className="eyebrow">YOU'RE SIGNED IN</p>
+            <h1 id="page-title">Welcome, {user.name}</h1>
+            <p className="subtitle">{user.email}</p>
+            <button className="submit-button" type="button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="eyebrow">MIYEON</p>
+            <h1 id="page-title">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+            <p className="subtitle">
+              {mode === 'login'
+                ? 'Sign in to continue to your account.'
+                : 'Sign up to get started.'}
+            </p>
+
+            <form onSubmit={handleSubmit}>
+              {mode === 'signup' && (
+                <label>
+                  Your name
+                  <input
+                    autoComplete="name"
+                    maxLength={100}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Jane Doe"
+                    required
+                    value={name}
+                  />
+                </label>
+              )}
+              <label>
+                Email address
+                <input
+                  autoComplete="email"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  type="email"
+                  value={email}
+                />
+              </label>
+              <label>
+                Password
+                <input
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  minLength={8}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="At least 8 characters"
+                  required
+                  type="password"
+                  value={password}
+                />
+              </label>
+
+              {error && <p className="error-message" role="alert">{error}</p>}
+
+              <button className="submit-button" disabled={loading} type="submit">
+                {loading
+                  ? 'Please wait...'
+                  : mode === 'login'
+                    ? 'Sign in'
+                    : 'Create account'}
+              </button>
+            </form>
+
+            <p className="mode-switch">
+              {mode === 'login' ? 'New here?' : 'Already have an account?'}{' '}
+              <button
+                onClick={() => {
+                  setMode(mode === 'login' ? 'signup' : 'login')
+                  setError('')
+                }}
+                type="button"
+              >
+                {mode === 'login' ? 'Create an account' : 'Sign in'}
+              </button>
+            </p>
+          </>
+        )}
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <p className="footer-note">Your account details are kept secure.</p>
+    </main>
   )
 }
 
